@@ -1,73 +1,42 @@
 # FloorTrace
 
-Native Android prototype for high-resolution personal positioning in Russia: GNSS/A-GNSS stack + raw GNSS diagnostics + inertial pedestrian dead reckoning + barometric floor estimation + OSM buildings/indoor features + best-effort NSPD cadastral overlay.
+Исследовательское приложение Android для позиционирования: GNSS, инерциальное сопровождение, барометрическая оценка этажа, Wi-Fi RTT, здания и помещения OpenStreetMap. Дополнительный кадастровый слой NSPD работает по возможности и не должен блокировать позиционирование.
 
-## What works
+[English documentation](README.en.md)
 
-- Native Android `LocationManager` GPS + network provider (A-GNSS assistance remains inside the Android/GNSS stack).
-- `GnssStatus` satellites, satellites used in fix, average C/N₀.
-- `GnssMeasurementsEvent` raw GNSS measurement count for diagnostics / future pseudorange engine.
-- Rotation-vector heading, barometer, step detector, magnetometer and gyroscope diagnostics.
-- Wi-Fi RTT ranging on Android 9+ when the phone/APs support IEEE 802.11mc/802.11az; with 3+ surveyed AP anchors the RTT fix is trilaterated and fused into the position.
-- PDR: every detected step advances the fused position by ~0.72 m only while the rotation vector and magnetic field are trustworthy. Magnetic declination and circular heading smoothing are applied, and uncertainty grows with every step.
-- Robust horizontal fusion rejects stale/coarse fixes and one-off GNSS jumps (including indoor jumps between building wings). A displaced fix must form a persistent cluster before it can re-anchor the track; the displayed radius is the fused uncertainty rather than the last provider claim.
-- Barometric floor estimate after entering a mapped building or manual calibration.
-- OSM building and `Simple Indoor Tagging` room/corridor polygons from Overpass.
-- Current-room inference only when an indoor polygon exists; confidence is reduced when horizontal GNSS uncertainty is comparable to room size.
-- Cadastral overlay through an isolated NSPD adapter (`/api/geoportal/v1/intersects`) using EPSG:3857 geometry. Failure of NSPD never breaks positioning.
-- Fully native custom raster/vector map view; no Google Maps SDK and no proprietary map SDK.
-- OSM raster tile disk+RAM cache and proper attribution.
+## Что реализовано
 
-## Important physical limits
+- GPS и сетевой провайдер Android, спутники и диагностические сырые GNSS-наблюдения;
+- шагомер, направление по датчикам, сопровождение трека с растущей неопределённостью;
+- фильтр грубых/устаревших координат и единичных скачков GNSS;
+- оценка этажа по давлению после ручной калибровки или входа в известное здание;
+- Wi-Fi RTT на совместимых устройствах с минимум тремя заранее измеренными точками доступа;
+- полигоны зданий, комнат и коридоров OSM через Overpass;
+- собственная карта, кеш растровых тайлов, атрибуция OSM;
+- необязательный адаптер кадастровых данных NSPD.
 
-A stock smartphone cannot reliably identify an arbitrary room nationwide using GPS/A-GPS alone. GNSS degrades inside buildings and public floor plans are sparse. FloorTrace therefore separates **measurement** from **inference**:
+RTT отбрасывает некорректные координаты, неопределённости NaN/Infinity и повторные BSSID; вырожденная геометрия не выдаёт позицию. В `app/src/main/assets/anchors.json` нет готовых точек: добавьте измеренные координаты по образцу `anchors.example.json`.
 
-1. outdoors: GNSS is the main absolute anchor;
-2. during indoor transition: pressure becomes the vertical anchor;
-3. indoors: step detector + orientation propagate the last good position;
-4. available indoor polygons constrain/label the inferred room;
-5. GNSS fixes re-anchor PDR when they become trustworthy again.
+## Границы точности
 
-For repeatable room-level accuracy in difficult buildings, add at least one infrastructure/fingerprint source. Wi‑Fi RTT is already wired into this project; BLE/UWB, surveyed QR/NFC anchors, or a locally trained Wi‑Fi/magnetic fingerprint map are natural next providers.
+Обычный смартфон не определяет произвольную комнату по GPS во всех зданиях. Отображаемый результат объединяет измерения и вывод по модели; это не гарантия физической точности. Внутри зданий GNSS ухудшается, инерциальная ошибка накапливается, давление зависит от условий. Для воспроизводимой точности помещения нужны измеренные RTT/BLE/UWB-якоря либо карта отпечатков сигналов. Без геометрии помещений приложение не должно изображать достоверное распознавание комнаты.
 
-### Wi-Fi RTT anchors
+## Сборка
 
-`app/src/main/assets/anchors.json` is intentionally empty. Add surveyed RTT-capable APs there (BSSID + WGS84 coordinate). See `anchors.example.json`. With at least three currently visible anchored APs, FloorTrace computes a local least-squares trilateration fix and mixes it into the fused track. Because this app *does* derive physical position from Wi-Fi, the Android 13+ `NEARBY_WIFI_DEVICES` permission is declared without `neverForLocation`.
+Нужны JDK 17, Android SDK 36 и Build Tools 36.0.0. Версии Android Gradle Plugin и Gradle зафиксированы в проекте. `local.properties` содержит только локальный путь SDK и не публикуется.
 
-## Data sources
-
-- **OpenStreetMap** — base map, building polygons and indoor data. Attribution required: `© OpenStreetMap contributors`, ODbL.
-- **OSM Overpass API** — live query of nearby building/indoor geometry. For production, host your own Overpass endpoint or cache aggressively.
-- **NSPD / Rosreestr** — cadastral polygons. The code intentionally treats the current geoportal transport as a best-effort adapter, because web-portal endpoints can change.
-- **Overture Maps buildings** — recommended for a production preprocessing backend/offline region packages when OSM building coverage is insufficient. Overture releases global building data in GeoParquet; it is not queried directly by this phone-only prototype.
-
-## Build
-
-Open the root folder in Android Studio (Quail 4 / 2026.1.4 or newer) and install Android SDK 36 + Build Tools 36.0.0.
-
-```bash
-./gradlew assembleDebug
+```sh
+./gradlew testDebugUnitTest assembleDebug
 ```
 
-APK path:
+APK: `app/build/outputs/apk/debug/app-debug.apk`. Это отладочная сборка, подписанная локальным debug-ключом; магазинная публикация и release signing отдельно. [Результаты проверки](BUILD_STATUS.md).
 
-```text
-app/build/outputs/apk/debug/app-debug.apk
-```
+## Источники и ограничения эксплуатации
 
-The included GitHub Actions workflow also builds the debug APK on every push/manual run.
+OSM требует атрибуции `© OpenStreetMap contributors`; данные распространяются по ODbL. Публичные тайловые и Overpass-сервисы имеют ограничения нагрузки: для эксплуатации нужны кеширование и подходящий сервер. NSPD не является стабильным мобильным SDK, его доступность и условия использования проверяются отдельно. [Технические заметки](SOURCES.md).
 
-## Production hardening checklist
+Приложению нужны разрешения местоположения, датчиков и Wi-Fi согласно версии Android. Трек и диагностические координаты чувствительны: не публикуйте личные записи и измеренные домашние BSSID вместе с исходниками. Полевая точность и энергопотребление требуют испытаний на физических устройствах; сборка APK и unit-тесты их не заменяют.
 
-- Replace `tile.openstreetmap.org` with your own tile service / PMTiles packages; the public OSM tile server is not a production CDN.
-- Host your own Overpass mirror or build regional offline packages.
-- Put Overture/OSM/NSPD conflation in a backend preprocessing pipeline if you need nationwide building coverage.
-- Add local encrypted recording of GNSS raw + sensor events and replay tests.
-- Add surveyed entrance/elevator anchors; they dramatically improve absolute floor calibration.
-- Survey Wi‑Fi RTT AP coordinates for priority buildings; the RTT adapter is included but needs anchors.
-- Add BLE/UWB providers for buildings where you control infrastructure.
-- Use a proper EKF/UKF with phone attitude and step-length calibration for research-grade PDR.
+## Следующие работы
 
-## License
-
-Project code: Apache-2.0. Data displayed by the app remains under the terms of the respective data provider.
+Полевые сценарии с эталонным треком; оценка ошибки и калибровка барометра; обработка жизненного цикла датчиков и разрешений; лимиты внешних запросов; офлайн-данные; поддержка системных edge-to-edge API вместо устаревших методов отображения.

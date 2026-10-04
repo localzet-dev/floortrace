@@ -32,7 +32,13 @@ object RttTrilateration {
      */
     fun solve(ranges: List<RttRange>): RttSolution? {
         val valid = ranges
-            .filter { it.distanceMeters in 0.1..80.0 }
+            .filter {
+                it.distanceMeters in 0.1..80.0 &&
+                    it.stdDevMeters.isFinite() && it.stdDevMeters > 0.0 &&
+                    it.anchor.lat.isFinite() && it.anchor.lat in -90.0..90.0 &&
+                    it.anchor.lon.isFinite() && it.anchor.lon in -180.0..180.0
+            }
+            .distinctBy { it.anchor.bssid.lowercase(java.util.Locale.ROOT) }
             .sortedBy { it.stdDevMeters }
             .take(12)
         if (valid.size < 3) return null
@@ -73,9 +79,11 @@ object RttTrilateration {
         }
 
         val det = a11 * a22 - a12 * a12
-        if (kotlin.math.abs(det) < 1e-7) return null
+        if (!det.isFinite() || kotlin.math.abs(det) < 1e-7) return null
         val x = (c1 * a22 - c2 * a12) / det
         val y = (a11 * c2 - a12 * c1) / det
+
+        if (!x.isFinite() || !y.isFinite()) return null
 
         var weightedResidual = 0.0
         var totalWeight = 0.0

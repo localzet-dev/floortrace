@@ -1,11 +1,11 @@
-# Build status
+# Проверка сборки
 
-The source tree was statically/syntactically checked in the generation environment:
+4 октября 2026 года на локальной Android SDK выполнена команда:
 
-- pure Kotlin positioning math, floor estimator, models, and RTT trilateration compile with the installed Kotlin compiler;
-- RTT solver numeric sanity test converges on a synthetic four-anchor layout;
-- Android XML resources parse successfully;
-- shell bootstrap scripts pass `sh -n`;
-- source ZIP passes `zip -T`.
+```sh
+bash gradlew testDebugUnitTest assembleDebug
+```
 
-A real APK could not be produced inside this generation runtime because it contains no Android SDK/build-tools/Gradle and outbound DNS is disabled, so the bootstrap cannot download them. No placeholder/fake `.apk` is included. On a normal Android development machine or the included GitHub Actions workflow, run `./gradlew assembleDebug`; output is `app/build/outputs/apk/debug/app-debug.apk`.
+Результат: `BUILD SUCCESSFUL`; создан настоящий отладочный APK. Пройдены unit-тесты фильтра позиционирования и RTT: синтетическая геометрия четырёх якорей, некорректные неопределённости/координаты и повторные точки доступа.
+
+При сборке остаются предупреждения об устаревших Android API для системных панелей, дисплея, Wi-Fi scan и масштабирования текста. Это отдельная задача совместимости; предупреждения не скрываются. Полевая проверка точности на устройстве этой проверкой не выполнялась.
