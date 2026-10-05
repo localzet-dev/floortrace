@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Ivan Zorin <creator@localzet.com> (Localzet contributions)
+// SPDX-License-Identifier: Apache-2.0
 package com.localzet.floortrace.positioning.rtt
 
 import com.localzet.floortrace.data.model.GeoPoint
